@@ -24,7 +24,7 @@ LOCAL_C_INCLUDES:= \
 LOCAL_SRC_FILES := \
 	aplay/aplay.c
 
-LOCAL_MODULE_TAGS := debug
+LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_aplay
 
 LOCAL_SHARED_LIBRARIES := \
@@ -56,7 +56,7 @@ LOCAL_SRC_FILES := \
 	alsactl/state.c \
 	alsactl/utils.c
 
-LOCAL_MODULE_TAGS := debug
+LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_ctl
 
 LOCAL_SHARED_LIBRARIES := \
@@ -85,7 +85,7 @@ LOCAL_C_INCLUDES:= \
 LOCAL_SRC_FILES := \
 	amixer/amixer.c
 
-LOCAL_MODULE_TAGS := debug
+LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_amixer
 
 LOCAL_SHARED_LIBRARIES := \
