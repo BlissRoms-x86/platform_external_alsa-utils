@@ -28,6 +28,7 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_aplay
 
 LOCAL_SHARED_LIBRARIES := \
+	libaudio \
 	libasound \
 	libc
 
@@ -60,10 +61,44 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_ctl
 
 LOCAL_SHARED_LIBRARIES := \
+	libaudio \
 	libasound \
 	libc
 
 include $(BUILD_EXECUTABLE)
+
+
+
+#
+# Build alsaucm command
+#
+
+include $(CLEAR_VARS)
+
+LOCAL_CFLAGS := \
+        -fPIC -D_POSIX_SOURCE \
+        -DALSA_CONFIG_DIR=\"/system/usr/share/alsa/ucm\" \
+        -DALSA_PLUGIN_DIR=\"/system/usr/lib/alsa-lib\" \
+        -DALSA_DEVICE_DIRECTORY=\"/dev/snd/\"
+
+LOCAL_C_INCLUDES:= \
+        $(LOCAL_PATH)/include \
+        $(LOCAL_PATH)/android \
+        external/alsa-lib/include
+
+LOCAL_SRC_FILES := \
+        alsaucm/usecase.c \
+
+LOCAL_MODULE_TAGS := debug
+LOCAL_MODULE := alsa_ucm
+
+LOCAL_SHARED_LIBRARIES := \
+        libaudio \
+        libasound \
+        libc
+
+include $(BUILD_EXECUTABLE)
+
 
 #
 # Build amixer command
@@ -89,6 +124,7 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_amixer
 
 LOCAL_SHARED_LIBRARIES := \
+	libaudio \
 	libasound \
 	libc
 

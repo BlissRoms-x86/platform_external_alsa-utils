@@ -58,15 +58,10 @@ static int snd_config_integer_add(snd_config_t *father, char *id, long integer)
 {
 	int err;
 	snd_config_t *leaf;
-	err = snd_config_make_integer(&leaf, id);
+	err = snd_config_imake_integer(&leaf, id, integer);
 	if (err < 0)
 		return err;
 	err = snd_config_add(father, leaf);
-	if (err < 0) {
-		snd_config_delete(leaf);
-		return err;
-	}
-	err = snd_config_set_integer(leaf, integer);
 	if (err < 0) {
 		snd_config_delete(leaf);
 		return err;
@@ -78,15 +73,10 @@ static int snd_config_integer64_add(snd_config_t *father, char *id, long long in
 {
 	int err;
 	snd_config_t *leaf;
-	err = snd_config_make_integer64(&leaf, id);
+	err = snd_config_imake_integer64(&leaf, id, integer);
 	if (err < 0)
 		return err;
 	err = snd_config_add(father, leaf);
-	if (err < 0) {
-		snd_config_delete(leaf);
-		return err;
-	}
-	err = snd_config_set_integer64(leaf, integer);
 	if (err < 0) {
 		snd_config_delete(leaf);
 		return err;
@@ -98,15 +88,10 @@ static int snd_config_string_add(snd_config_t *father, const char *id, const cha
 {
 	int err;
 	snd_config_t *leaf;
-	err = snd_config_make_string(&leaf, id);
+	err = snd_config_imake_string(&leaf, id, string);
 	if (err < 0)
 		return err;
 	err = snd_config_add(father, leaf);
-	if (err < 0) {
-		snd_config_delete(leaf);
-		return err;
-	}
-	err = snd_config_set_string(leaf, string);
 	if (err < 0) {
 		snd_config_delete(leaf);
 		return err;
@@ -179,14 +164,18 @@ static unsigned int *str_to_tlv(const char *s)
 }
 
 /*
- * add the TLV string and dB ranges to comment fields
+ * add the TLV string, dB ranges, and dB values to comment fields
  */
 static int add_tlv_comments(snd_ctl_t *handle, snd_ctl_elem_id_t *id,
-			    snd_ctl_elem_info_t *info, snd_config_t *comment)
+			    snd_ctl_elem_info_t *info, snd_ctl_elem_value_t *ctl,
+			    snd_config_t *comment)
 {
 	unsigned int tlv[MAX_USER_TLV_SIZE];
 	unsigned int *db;
-	long dbmin, dbmax;
+	long rangemin, rangemax;
+	long dbmin, dbmax, dbgain;
+	snd_config_t *value;
+	unsigned int i, count;
 	int err;
 
 	if (snd_ctl_elem_tlv_read(handle, id, tlv, sizeof(tlv)) < 0)
@@ -208,13 +197,35 @@ static int add_tlv_comments(snd_ctl_t *handle, snd_ctl_elem_id_t *id,
 	if (err <= 0)
 		return 0;
 
-	snd_tlv_get_dB_range(db, snd_ctl_elem_info_get_min(info),
-			     snd_ctl_elem_info_get_max(info),
-			     &dbmin, &dbmax);
+	rangemin = snd_ctl_elem_info_get_min(info);
+	rangemax = snd_ctl_elem_info_get_max(info);
+	snd_tlv_get_dB_range(db, rangemin, rangemax, &dbmin, &dbmax);
 	if (err < 0)
 		return err;
 	snd_config_integer_add(comment, "dbmin", dbmin);
 	snd_config_integer_add(comment, "dbmax", dbmax);
+
+	if (snd_ctl_elem_info_get_type(info) == SND_CTL_ELEM_TYPE_INTEGER) {
+		err = snd_config_compound_add(comment, "dbvalue", 1, &value);
+		if (err < 0) {
+			error("snd_config_compound_add: %s", snd_strerror(err));
+			return err;
+		}
+		count = snd_ctl_elem_info_get_count(info);
+		for (i = 0; i < count; i++) {
+			err = snd_tlv_convert_to_dB(db, rangemin, rangemax,
+					snd_ctl_elem_value_get_integer(ctl, i), &dbgain);
+			if (err < 0) {
+				error("snd_tlv_convert_to_dB: %s", snd_strerror(err));
+				return err;
+			}
+			err = snd_config_integer_add(value, num_str(i), dbgain);
+			if (err < 0) {
+				error("snd_config_integer_add: %s", snd_strerror(err));
+				return err;
+			}
+		}
+	}
 	return 0;
 }
 
@@ -240,8 +251,7 @@ static int get_control(snd_ctl_t *handle, snd_ctl_elem_id_t *id, snd_config_t *t
 		return err;
 	}
 
-	if (snd_ctl_elem_info_is_inactive(info) ||
-				!snd_ctl_elem_info_is_readable(info))
+	if (!snd_ctl_elem_info_is_readable(info))
 		return 0;
 	snd_ctl_elem_value_set_id(ctl, id);
 	err = snd_ctl_elem_read(handle, ctl);
@@ -255,9 +265,9 @@ static int get_control(snd_ctl_t *handle, snd_ctl_elem_id_t *id, snd_config_t *t
 		error("snd_config_compound_add: %s", snd_strerror(err));
 		return err;
 	}
-	err = snd_config_compound_add(control, "comment", 1, &comment);
+	err = snd_config_make_compound(&comment, "comment", 0);
 	if (err < 0) {
-		error("snd_config_compound_add: %s", snd_strerror(err));
+		error("snd_config_make_compound: %s", snd_strerror(err));
 		return err;
 	}
 
@@ -317,7 +327,7 @@ static int get_control(snd_ctl_t *handle, snd_ctl_elem_id_t *id, snd_config_t *t
 			return err;
 		}
 		if (snd_ctl_elem_info_is_tlv_readable(info)) {
-			err = add_tlv_comments(handle, id, info, comment);
+			err = add_tlv_comments(handle, id, info, ctl, comment);
 			if (err < 0)
 				return err;
 		}
@@ -421,7 +431,7 @@ static int get_control(snd_ctl_t *handle, snd_ctl_elem_id_t *id, snd_config_t *t
 			error("snd_config_string_add: %s", snd_strerror(err));
 			return err;
 		}
-		return 0;
+		goto finish;
 	}
 	default:
 		break;
@@ -435,21 +445,21 @@ static int get_control(snd_ctl_t *handle, snd_ctl_elem_id_t *id, snd_config_t *t
 				error("snd_config_string_add: %s", snd_strerror(err));
 				return err;
 			}
-			return 0;
+			goto finish;
 		case SND_CTL_ELEM_TYPE_INTEGER:
 			err = snd_config_integer_add(control, "value", snd_ctl_elem_value_get_integer(ctl, 0));
 			if (err < 0) {
 				error("snd_config_integer_add: %s", snd_strerror(err));
 				return err;
 			}
-			return 0;
+			goto finish;
 		case SND_CTL_ELEM_TYPE_INTEGER64:
 			err = snd_config_integer64_add(control, "value", snd_ctl_elem_value_get_integer64(ctl, 0));
 			if (err < 0) {
 				error("snd_config_integer64_add: %s", snd_strerror(err));
 				return err;
 			}
-			return 0;
+			goto finish;
 		case SND_CTL_ELEM_TYPE_ENUMERATED:
 		{
 			unsigned int v = snd_ctl_elem_value_get_enumerated(ctl, 0);
@@ -464,7 +474,7 @@ static int get_control(snd_ctl_t *handle, snd_ctl_elem_id_t *id, snd_config_t *t
 			}
 			if (err < 0)
 				error("snd_config add: %s", snd_strerror(err));
-			return 0;
+			goto finish;
 		}
 		default:
 			error("Unknown control type: %d\n", type);
@@ -529,6 +539,12 @@ static int get_control(snd_ctl_t *handle, snd_ctl_elem_id_t *id, snd_config_t *t
 		return -EINVAL;
 	}
 	
+finish:
+	err = snd_config_add(control, comment);
+	if (err < 0) {
+		error("snd_config_add: %s", snd_strerror(err));
+		return err;
+	}
 	return 0;
 }
 	
@@ -538,6 +554,7 @@ static int get_controls(int cardno, snd_config_t *top)
 	snd_ctl_card_info_t *info;
 	snd_config_t *state, *card, *control;
 	snd_ctl_elem_list_t *list;
+	snd_ctl_elem_id_t *elem_id;
 	unsigned int idx;
 	int err;
 	char name[32];
@@ -545,6 +562,7 @@ static int get_controls(int cardno, snd_config_t *top)
 	const char *id;
 	snd_ctl_card_info_alloca(&info);
 	snd_ctl_elem_list_alloca(&list);
+	snd_ctl_elem_id_alloca(&elem_id);
 
 	sprintf(name, "hw:%d", cardno);
 	err = snd_ctl_open(&handle, name, SND_CTL_READONLY);
@@ -619,10 +637,8 @@ static int get_controls(int cardno, snd_config_t *top)
 		goto _free;
 	}
 	for (idx = 0; idx < count; ++idx) {
-		snd_ctl_elem_id_t *id;
-		snd_ctl_elem_id_alloca(&id);
-		snd_ctl_elem_list_get_id(list, idx, id);
-		err = get_control(handle, id, control);
+		snd_ctl_elem_list_get_id(list, idx, elem_id);
+		err = get_control(handle, elem_id, control);
 		if (err < 0)
 			goto _free;
 	}		
@@ -761,7 +777,7 @@ static int config_integer64(snd_config_t *n, long long *val, int doit)
 	return err;
 }
 
-static int is_user_control(snd_config_t *conf)
+static int check_comment_access(snd_config_t *conf, const char *str)
 {
 	snd_config_iterator_t i, next;
 
@@ -773,7 +789,7 @@ static int is_user_control(snd_config_t *conf)
 		if (strcmp(id, "access") == 0) {
 			if (snd_config_get_string(n, &s) < 0)
 				return 0;
-			if (strstr(s, "user"))
+			if (strstr(s, str))
 				return 1;
 		}
 	}
@@ -915,31 +931,14 @@ static int add_user_control(snd_ctl_t *handle, snd_ctl_elem_info_t *info, snd_co
 }
 
 /*
- * look for a config node with the given item name
- */
-static snd_config_t *search_comment_item(snd_config_t *conf, const char *name)
-{
-	snd_config_iterator_t i, next;
-	snd_config_for_each(i, next, conf) {
-		snd_config_t *n = snd_config_iterator_entry(i);
-		const char *id;
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
-		if (strcmp(id, name) == 0)
-			return n;
-	}
-	return NULL;
-}
-
-/*
  * check whether the config item has the same of compatible type
  */
 static int check_comment_type(snd_config_t *conf, int type)
 {
-	snd_config_t *n = search_comment_item(conf, "type");
+	snd_config_t *n;
 	int ctype;
 
-	if (!n)
+	if (snd_config_search(conf, "type", &n) < 0)
 		return 0; /* not defined */
 	ctype = get_comment_type(n);
 	if (ctype == type)
@@ -962,20 +961,31 @@ static int check_comment_type(snd_config_t *conf, int type)
 static int convert_to_new_db(snd_config_t *value, long omin, long omax,
 			     long nmin, long nmax,
 			     long odbmin, long odbmax,
-			     long ndbmin, long ndbmax,
+			     snd_config_t *comment, const char *index,
+			     snd_ctl_t *device, snd_ctl_elem_id_t *id,
 			     int doit)
 {
-	long val;
-	if (config_integer(value, &val, doit) < 0)
-		return -EINVAL;
-	if (val < omin || val > omax)
-		return -EINVAL;
-	val = ((val - omin) * (odbmax - odbmin)) / (omax - omin) + odbmin;
-	if (val < ndbmin)
-		val = ndbmin;
-	else if (val > ndbmax)
-		val = ndbmax;
-	val = ((val - ndbmin) * (nmax - nmin)) / (ndbmax - ndbmin) + nmin;
+	snd_config_t *db_node;
+	long db, val;
+	int err;
+
+	if (snd_config_searchv(comment, &db_node, "dbvalue", index, NULL) < 0 ||
+	    snd_config_get_integer(db_node, &db) < 0) {
+		err = config_integer(value, &val, doit);
+		if (err < 0)
+			return err;
+		if (val < omin || val > omax)
+			return -EINVAL;
+		db = ((val - omin) * (odbmax - odbmin)) / (omax - omin) + odbmin;
+	}
+
+	err = snd_ctl_convert_from_dB(device, id, db, &val, db > 0);
+	if (err < 0)
+		return err;
+	if (val < nmin)
+		val = nmin;
+	else if (val > nmax)
+		val = nmax;
 	return snd_config_set_integer(value, val);
 }
 
@@ -995,8 +1005,7 @@ static int check_comment_range(snd_ctl_t *handle, snd_config_t *conf,
 	long ndbmin, ndbmax;
 	snd_ctl_elem_id_t *id;
 
-	n = search_comment_item(conf, "range");
-	if (!n)
+	if (snd_config_search(conf, "range", &n) < 0)
 		return 0;
 	if (get_comment_range(n, SND_CTL_ELEM_TYPE_INTEGER,
 			      &omin, &omax, &ostep) < 0)
@@ -1011,13 +1020,11 @@ static int check_comment_range(snd_ctl_t *handle, snd_config_t *conf,
 	if (omin >= omax || nmin >= nmax)
 		return 0; /* invalid values */
 
-	n = search_comment_item(conf, "dbmin");
-	if (!n)
+	if (snd_config_search(conf, "dbmin", &n) < 0)
 		return 0;
 	if (config_integer(n, &odbmin, doit) < 0)
 		return 0;
-	n = search_comment_item(conf, "dbmax");
-	if (!n)
+	if (snd_config_search(conf, "dbmax", &n) < 0)
 		return 0;
 	if (config_integer(n, &odbmax, doit) < 0)
 		return 0;
@@ -1038,12 +1045,17 @@ static int check_comment_range(snd_ctl_t *handle, snd_config_t *conf,
 		snd_config_iterator_t i, next;
 		snd_config_for_each(i, next, value) {
 			snd_config_t *n = snd_config_iterator_entry(i);
+			const char *idxstr;
+			if (snd_config_get_id(n, &idxstr) < 0)
+				continue;
 			convert_to_new_db(n, omin, omax, nmin, nmax,
-					  odbmin, odbmax, ndbmin, ndbmax, doit);
+					  odbmin, odbmax, conf, idxstr,
+					  handle, id, doit);
 		}
 	} else
 		convert_to_new_db(value, omin, omax, nmin, nmax,
-				  odbmin, odbmax, ndbmin, ndbmax, doit);
+				  odbmin, odbmax, conf, "0",
+				  handle, id, doit);
 	return 0;
 }
 
@@ -1242,7 +1254,7 @@ static int set_control(snd_ctl_t *handle, snd_config_t *control,
 		snd_ctl_elem_info_set_name(info, name);
 		snd_ctl_elem_info_set_index(info, index);
 		err = snd_ctl_elem_info(handle, info);
-		if (err < 0 && comment && is_user_control(comment)) {
+		if (err < 0 && comment && check_comment_access(comment, "user")) {
 			err = add_user_control(handle, info, comment);
 			if (err < 0) {
 				cerror(doit, "failed to add user control #%d (%s)",
@@ -1291,6 +1303,9 @@ static int set_control(snd_ctl_t *handle, snd_config_t *control,
 				return -EINVAL;
 			}
 		}
+		/* inactive controls are not restored */
+		if (comment && check_comment_access(comment, "inactive"))
+			return 0;
 	}
 
 	if (snd_ctl_elem_info_is_inactive(info) ||

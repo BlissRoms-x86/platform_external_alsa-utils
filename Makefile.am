@@ -1,6 +1,6 @@
 INCLUDES=-I$(top_srcdir)/include
 
-SUBDIRS = include alsactl utils m4 po
+SUBDIRS = include alsactl alsaucm utils m4 po
 if ALSAMIXER
 SUBDIRS += alsamixer
 endif
@@ -15,6 +15,9 @@ SUBDIRS += alsaconf
 endif
 if HAVE_PCM
 SUBDIRS += aplay iecset speaker-test
+if ALSALOOP
+SUBDIRS += alsaloop
+endif
 endif
 if HAVE_SEQ
 SUBDIRS += seq
@@ -34,3 +37,9 @@ dist-hook:
 	else \
 		$(TAR) --create --verbose --file=- $(distdir) | bzip2 -c -9 > $(distdir).tar.bz2 ; \
 	fi
+
+install-data-hook:
+	$(MKDIR_P) -m 0755 $(DESTDIR)$(ASOUND_STATE_DIR)
+
+DISTCHECK_CONFIGURE_FLAGS = \
+        --with-systemdsystemunitdir=$$dc_install_base/$(systemdsystemunitdir)
