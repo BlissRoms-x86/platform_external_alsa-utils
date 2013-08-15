@@ -28,7 +28,6 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_aplay
 
 LOCAL_SHARED_LIBRARIES := \
-	libaudio \
 	libasound \
 	libc
 
@@ -61,7 +60,6 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_ctl
 
 LOCAL_SHARED_LIBRARIES := \
-	libaudio \
 	libasound \
 	libc
 
@@ -93,7 +91,6 @@ LOCAL_MODULE_TAGS := debug
 LOCAL_MODULE := alsa_ucm
 
 LOCAL_SHARED_LIBRARIES := \
-        libaudio \
         libasound \
         libc
 
@@ -124,7 +121,6 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_amixer
 
 LOCAL_SHARED_LIBRARIES := \
-	libaudio \
 	libasound \
 	libc
 
