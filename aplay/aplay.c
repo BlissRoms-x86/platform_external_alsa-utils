@@ -38,6 +38,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <time.h>
+#include <endian.h>
 #include <locale.h>
 #include <alsa/asoundlib.h>
 #include <assert.h>
@@ -1489,9 +1490,9 @@ static void compute_max_peak(u_char *data, size_t count)
 		c = 0;
 		while (count-- > 0) {
 			if (format_little_endian)
-				sval = __le16_to_cpu(*valp);
+				sval = le16toh(*valp);
 			else
-				sval = __be16_to_cpu(*valp);
+				sval = be16toh(*valp);
 			sval = abs(sval) ^ mask;
 			if (max_peak[c] < sval)
 				max_peak[c] = sval;
@@ -1534,9 +1535,9 @@ static void compute_max_peak(u_char *data, size_t count)
 		c = 0;
 		while (count-- > 0) {
 			if (format_little_endian)
-				val = __le32_to_cpu(*valp);
+				val = le32toh(*valp);
 			else
-				val = __be32_to_cpu(*valp);
+				val = be32toh(*valp);
 			val = abs(val) ^ mask;
 			if (max_peak[c] < val)
 				max_peak[c] = val;
