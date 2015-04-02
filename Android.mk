@@ -8,28 +8,28 @@ LOCAL_PATH:= $(call my-dir)
 # Build aplay command
 #
 
-include $(CLEAR_VARS)
-
-LOCAL_CFLAGS := \
+ALSA_UTILS_CFLAGS := \
 	-fPIC -D_POSIX_SOURCE \
 	-DALSA_CONFIG_DIR=\"/system/usr/share/alsa\" \
 	-DALSA_PLUGIN_DIR=\"/system/usr/lib/alsa-lib\" \
 	-DALSA_DEVICE_DIRECTORY=\"/dev/snd/\"
 
-LOCAL_C_INCLUDES:= \
+ALSA_UTILS_C_INCLUDES := \
 	$(LOCAL_PATH)/include \
-	$(LOCAL_PATH)/android \
-	external/alsa-lib/include
+	$(LOCAL_PATH)/android
+
+include $(CLEAR_VARS)
+
+LOCAL_CFLAGS := $(ALSA_UTILS_CFLAGS)
+LOCAL_C_INCLUDES:= $(ALSA_UTILS_C_INCLUDES)
 
 LOCAL_SRC_FILES := \
 	aplay/aplay.c
 
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_aplay
-
-LOCAL_SHARED_LIBRARIES := \
-	libasound \
-	libc
+LOCAL_MULTILIB := 32
+LOCAL_SHARED_LIBRARIES := libasound
 
 include $(BUILD_EXECUTABLE)
 
@@ -39,16 +39,8 @@ include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := \
-	-fPIC -D_POSIX_SOURCE \
-	-DALSA_CONFIG_DIR=\"/system/usr/share/alsa\" \
-	-DALSA_PLUGIN_DIR=\"/system/usr/lib/alsa-lib\" \
-	-DALSA_DEVICE_DIRECTORY=\"/dev/snd/\"
-
-LOCAL_C_INCLUDES:= \
-	$(LOCAL_PATH)/include \
-	$(LOCAL_PATH)/android \
-	external/alsa-lib/include
+LOCAL_CFLAGS := $(ALSA_UTILS_CFLAGS)
+LOCAL_C_INCLUDES:= $(ALSA_UTILS_C_INCLUDES)
 
 LOCAL_SRC_FILES := \
 	alsactl/alsactl.c \
@@ -58,10 +50,8 @@ LOCAL_SRC_FILES := \
 
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_ctl
-
-LOCAL_SHARED_LIBRARIES := \
-	libasound \
-	libc
+LOCAL_MULTILIB := 32
+LOCAL_SHARED_LIBRARIES := libasound
 
 include $(BUILD_EXECUTABLE)
 
@@ -73,26 +63,16 @@ include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := \
-        -fPIC -D_POSIX_SOURCE \
-        -DALSA_CONFIG_DIR=\"/system/usr/share/alsa/ucm\" \
-        -DALSA_PLUGIN_DIR=\"/system/usr/lib/alsa-lib\" \
-        -DALSA_DEVICE_DIRECTORY=\"/dev/snd/\"
-
-LOCAL_C_INCLUDES:= \
-        $(LOCAL_PATH)/include \
-        $(LOCAL_PATH)/android \
-        external/alsa-lib/include
+LOCAL_CFLAGS := $(ALSA_UTILS_CFLAGS)
+LOCAL_C_INCLUDES:= $(ALSA_UTILS_C_INCLUDES)
 
 LOCAL_SRC_FILES := \
         alsaucm/usecase.c \
 
 LOCAL_MODULE_TAGS := debug
 LOCAL_MODULE := alsa_ucm
-
-LOCAL_SHARED_LIBRARIES := \
-        libasound \
-        libc
+LOCAL_MULTILIB := 32
+LOCAL_SHARED_LIBRARIES := libasound
 
 include $(BUILD_EXECUTABLE)
 
@@ -103,26 +83,16 @@ include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := \
-	-fPIC -D_POSIX_SOURCE \
-	-DALSA_CONFIG_DIR=\"/system/usr/share/alsa\" \
-	-DALSA_PLUGIN_DIR=\"/system/usr/lib/alsa-lib\" \
-	-DALSA_DEVICE_DIRECTORY=\"/dev/snd/\"
-
-LOCAL_C_INCLUDES:= \
-	$(LOCAL_PATH)/include \
-	$(LOCAL_PATH)/android \
-	external/alsa-lib/include
+LOCAL_CFLAGS := $(ALSA_UTILS_CFLAGS)
+LOCAL_C_INCLUDES:= $(ALSA_UTILS_C_INCLUDES)
 
 LOCAL_SRC_FILES := \
 	amixer/amixer.c
 
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := alsa_amixer
-
-LOCAL_SHARED_LIBRARIES := \
-	libasound \
-	libc
+LOCAL_MULTILIB := 32
+LOCAL_SHARED_LIBRARIES := libasound
 
 include $(BUILD_EXECUTABLE)
 
