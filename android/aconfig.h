@@ -2,7 +2,6 @@
 #define DATADIR "/system/usr/share/alsa"
 
 #define rindex strrchr
-#define open64 open
 
 #undef __swab16
 #define __swab16(x)  __arch__swab16((x))
