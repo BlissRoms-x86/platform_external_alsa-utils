@@ -12,7 +12,13 @@ ALSA_UTILS_CFLAGS := \
 	-fPIC -D_POSIX_SOURCE \
 	-DALSA_CONFIG_DIR=\"/system/usr/share/alsa\" \
 	-DALSA_PLUGIN_DIR=\"/system/usr/lib/alsa-lib\" \
-	-DALSA_DEVICE_DIRECTORY=\"/dev/snd/\"
+	-DALSA_DEVICE_DIRECTORY=\"/dev/snd/\" \
+        -Wno-absolute-value \
+        -Wno-enum-conversion \
+        -Wno-parentheses \
+        -Wno-pointer-arith \
+        -Wno-sign-compare \
+        -Wno-unused-parameter
 
 ALSA_UTILS_C_INCLUDES := \
 	$(LOCAL_PATH)/include \
