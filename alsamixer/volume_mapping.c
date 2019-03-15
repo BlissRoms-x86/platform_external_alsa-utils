@@ -36,6 +36,11 @@
 #include <stdbool.h>
 #include "volume_mapping.h"
 
+#ifdef ANDROID
+/* 10^x = 10^(log e^x) = (e^x)^log10 = e^(x * log 10) */
+#define exp10(x) (exp((x) * log(10)))
+#endif /* ANDROID */
+
 #define MAX_LINEAR_DB_SCALE	24
 
 static inline bool use_linear_dB_scale(long dBmin, long dBmax)
