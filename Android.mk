@@ -75,7 +75,7 @@ LOCAL_C_INCLUDES:= $(ALSA_UTILS_C_INCLUDES)
 LOCAL_SRC_FILES := \
         alsaucm/usecase.c \
 
-LOCAL_MODULE_TAGS := debug
+# LOCAL_MODULE_TAGS := debug
 LOCAL_MODULE := alsa_ucm
 LOCAL_MULTILIB := 32
 LOCAL_SHARED_LIBRARIES := libasound
