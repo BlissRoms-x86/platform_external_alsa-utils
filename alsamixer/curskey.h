@@ -1,6 +1,7 @@
 #ifndef CURSKEY_H_INCLUDED
 #define CURSKEY_H_INCLUDED
 
+#include <aconfig.h>
 #include CURSESINC
 
 /* Additional KEY_ constants */

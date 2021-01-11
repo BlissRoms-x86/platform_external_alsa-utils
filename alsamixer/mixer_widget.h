@@ -1,6 +1,7 @@
 #ifndef MIXER_WIDGET_H_INCLUDED
 #define MIXER_WIDGET_H_INCLUDED
 
+#include <aconfig.h>
 #include CURSESINC
 #include <alsa/asoundlib.h>
 #include "widget.h"

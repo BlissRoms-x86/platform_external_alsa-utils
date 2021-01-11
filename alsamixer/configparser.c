@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <pwd.h>
+#include <aconfig.h>
 #include CURSESINC
 #include "colors.h"
 #include "gettext_curses.h"

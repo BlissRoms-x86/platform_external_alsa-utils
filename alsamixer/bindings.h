@@ -1,6 +1,7 @@
 #ifndef BINDINGS_H_INCLUDED
 #define BINDINGS_H_INCLUDED
 
+#include <aconfig.h>
 #include CURSESINC
 #include <menu.h>
 #include <stdint.h>

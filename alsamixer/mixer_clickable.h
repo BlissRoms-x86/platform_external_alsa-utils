@@ -1,6 +1,7 @@
 #ifndef MIXER_CLICKABLE_H
 #define MIXER_CLICKABLE_H
 
+#include <aconfig.h>
 #include CURSESINC
 #include "bindings.h"
 
