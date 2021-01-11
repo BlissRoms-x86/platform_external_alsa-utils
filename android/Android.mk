@@ -34,6 +34,13 @@ ALSA_UTILS_C_INCLUDES := \
 	$(LOCAL_PATH)include \
 	$(LOCAL_PATH)android
 
+NCURSES_INCLUDE := \
+	$(LOCAL_PATH)/../libncurses/ncurses \
+	$(LOCAL_PATH)/../libncurses/panel \
+	$(LOCAL_PATH)/../libncurses/include \
+	$(LOCAL_PATH)/../libncurses/form \
+	$(LOCAL_PATH)/../libncurses/menu
+	
 # Build amixer command
 include $(CLEAR_VARS)
 
@@ -78,6 +85,7 @@ LOCAL_SRC_FILES := $(addprefix alsactl/,\
 	alsactl.c \
 	daemon.c \
 	init_parse.c \
+	init_ucm.c \
 	lock.c \
 	monitor.c \
 	state.c \
@@ -97,9 +105,63 @@ LOCAL_C_INCLUDES:= $(ALSA_UTILS_C_INCLUDES)
 
 LOCAL_SRC_FILES := \
         alsaucm/usecase.c \
+        alsaucm/dump.c
 
 LOCAL_MODULE := alsa_ucm
 LOCAL_SHARED_LIBRARIES := libasound
 LOCAL_ADDITIONAL_DEPENDENCIES := $(GEN)
+
+include $(BUILD_EXECUTABLE)
+
+# Build alsaloop command
+include $(CLEAR_VARS)
+
+LOCAL_CFLAGS := $(ALSA_UTILS_CFLAGS)
+LOCAL_C_INCLUDES:= $(ALSA_UTILS_C_INCLUDES)
+
+LOCAL_SRC_FILES := \
+        alsaloop/alsaloop.c \
+        alsaloop/control.c \
+        alsaloop/pcmjob.c
+
+LOCAL_MODULE := alsa_loop
+LOCAL_SHARED_LIBRARIES := libasound
+LOCAL_ADDITIONAL_DEPENDENCIES := $(GEN)
+
+include $(BUILD_EXECUTABLE)
+
+# Build alsamixer command
+include $(CLEAR_VARS)
+
+LOCAL_CFLAGS := $(ALSA_UTILS_CFLAGS) -D_GNU_SOURCE -lcurses -lmenu -lpanel -lncurses -lncursesw
+LOCAL_C_INCLUDES:= $(ALSA_UTILS_C_INCLUDES) $(NCURSES_INCLUDE) 
+LOCAL_SRC_FILES := \
+		alsamixer/bindings.c \
+		alsamixer/curskey.c \
+		alsamixer/configparser.c \
+		alsamixer/card_select.c \
+		alsamixer/cli.c \
+		alsamixer/colors.c \
+		alsamixer/device_name.c \
+		alsamixer/die.c \
+		alsamixer/mainloop.c \
+		alsamixer/mem.c \
+		alsamixer/menu_widget.c \
+		alsamixer/mixer_clickable.c \
+		alsamixer/mixer_controls.c \
+		alsamixer/mixer_display.c \
+		alsamixer/mixer_widget.c \
+		alsamixer/proc_files.c \
+		alsamixer/textbox.c \
+		alsamixer/utils.c \
+		alsamixer/volume_mapping.c \
+		alsamixer/widget.c
+
+LOCAL_MODULE := alsa_alsamixer
+LOCAL_SHARED_LIBRARIES := libasound libncurses
+LOCAL_STATIC_LIBRARIES := libmenu libpanel libform
+LOCAL_ADDITIONAL_DEPENDENCIES := $(GEN)
+man_MANS = alsamixer.1
+EXTRA_DIST = alsamixer.1
 
 include $(BUILD_EXECUTABLE)
