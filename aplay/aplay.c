@@ -32,6 +32,7 @@
 #include <malloc.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -94,6 +95,7 @@ enum {
 	VUMETER_STEREO
 };
 
+static snd_pcm_format_t default_format = DEFAULT_FORMAT;
 static char *command;
 static snd_pcm_t *handle;
 static struct {
@@ -186,13 +188,13 @@ static const struct fmt_capture {
 
 #if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 95)
 #define error(...) do {\
-	fprintf(stderr, "%s: %s:%d: ", command, __FUNCTION__, __LINE__); \
+	fprintf(stderr, "%s: %s:%d: ", command, __func__, __LINE__); \
 	fprintf(stderr, __VA_ARGS__); \
 	putc('\n', stderr); \
 } while (0)
 #else
 #define error(args...) do {\
-	fprintf(stderr, "%s: %s:%d: ", command, __FUNCTION__, __LINE__); \
+	fprintf(stderr, "%s: %s:%d: ", command, __func__, __LINE__); \
 	fprintf(stderr, ##args); \
 	putc('\n', stderr); \
 } while (0)
@@ -442,7 +444,7 @@ static ssize_t xwrite(int fd, const void *buf, size_t count)
 	size_t offset = 0;
 
 	while (offset < count) {
-		written = write(fd, buf + offset, count - offset);
+		written = write(fd, (char *)buf + offset, count - offset);
 		if (written <= 0)
 			return written;
 
@@ -466,6 +468,24 @@ static long parse_long(const char *str, int *err)
 		*err = 0;
 
 	return val;
+}
+
+static void try_to_adjust_default_format_16bit(void)
+{
+	snd_pcm_hw_params_t *params;
+	int err;
+
+	snd_pcm_hw_params_alloca(&params);
+	err = snd_pcm_hw_params_any(handle, params);
+	if (err < 0) {
+		error(_("Broken configuration for this PCM: no configurations available"));
+		prg_exit(EXIT_FAILURE);
+	}
+
+	if (file_type != FORMAT_AU && snd_pcm_hw_params_test_format(handle, params, SND_PCM_FORMAT_S16_LE) == 0)
+		rhwparams.format = default_format = SND_PCM_FORMAT_S16_LE;
+	else if (file_type == FORMAT_AU && snd_pcm_hw_params_test_format(handle, params, SND_PCM_FORMAT_S16_BE) == 0)
+		rhwparams.format = default_format = SND_PCM_FORMAT_S16_BE;
 }
 
 int main(int argc, char *argv[])
@@ -528,6 +548,7 @@ int main(int argc, char *argv[])
 	int do_device_list = 0, do_pcm_list = 0;
 	snd_pcm_info_t *info;
 	FILE *direction;
+	bool user_set_fmt = false;
 
 #ifdef ENABLE_NLS
 	setlocale(LC_ALL, "");
@@ -562,7 +583,7 @@ int main(int argc, char *argv[])
 	}
 
 	chunk_size = -1;
-	rhwparams.format = DEFAULT_FORMAT;
+	rhwparams.format = default_format;
 	rhwparams.rate = DEFAULT_SPEED;
 	rhwparams.channels = 1;
 
@@ -612,6 +633,7 @@ int main(int argc, char *argv[])
 			}
 			break;
 		case 'f':
+			user_set_fmt = true;
 			if (strcasecmp(optarg, "cd") == 0 || strcasecmp(optarg, "cdr") == 0) {
 				if (strcasecmp(optarg, "cdr") == 0)
 					rhwparams.format = SND_PCM_FORMAT_S16_BE;
@@ -844,6 +866,9 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (!user_set_fmt)
+		try_to_adjust_default_format_16bit();
+
 	chunk_size = 1024;
 	hwparams = rhwparams;
 
@@ -1064,7 +1089,7 @@ static ssize_t test_wavefile(int fd, u_char *_buffer, size_t size)
 	hwparams.channels = channels;
 	switch (TO_CPU_SHORT(f->bit_p_spl, big_endian)) {
 	case 8:
-		if (hwparams.format != DEFAULT_FORMAT &&
+		if (hwparams.format != default_format &&
 		    hwparams.format != SND_PCM_FORMAT_U8)
 			fprintf(stderr, _("Warning: format is changed to U8\n"));
 		hwparams.format = SND_PCM_FORMAT_U8;
@@ -1074,7 +1099,7 @@ static ssize_t test_wavefile(int fd, u_char *_buffer, size_t size)
 			native_format = SND_PCM_FORMAT_S16_BE;
 		else
 			native_format = SND_PCM_FORMAT_S16_LE;
-		if (hwparams.format != DEFAULT_FORMAT &&
+		if (hwparams.format != default_format &&
 		    hwparams.format != native_format)
 			fprintf(stderr, _("Warning: format is changed to %s\n"),
 				snd_pcm_format_name(native_format));
@@ -1087,7 +1112,7 @@ static ssize_t test_wavefile(int fd, u_char *_buffer, size_t size)
 				native_format = SND_PCM_FORMAT_S24_3BE;
 			else
 				native_format = SND_PCM_FORMAT_S24_3LE;
-			if (hwparams.format != DEFAULT_FORMAT &&
+			if (hwparams.format != default_format &&
 			    hwparams.format != native_format)
 				fprintf(stderr, _("Warning: format is changed to %s\n"),
 					snd_pcm_format_name(native_format));
@@ -1098,7 +1123,7 @@ static ssize_t test_wavefile(int fd, u_char *_buffer, size_t size)
 				native_format = SND_PCM_FORMAT_S24_BE;
 			else
 				native_format = SND_PCM_FORMAT_S24_LE;
-			if (hwparams.format != DEFAULT_FORMAT &&
+			if (hwparams.format != default_format &&
 			    hwparams.format != native_format)
 				fprintf(stderr, _("Warning: format is changed to %s\n"),
 					snd_pcm_format_name(native_format));
@@ -1184,19 +1209,19 @@ static int test_au(int fd, void *buffer)
 	pbrec_count = BE_INT(ap->data_size);
 	switch (BE_INT(ap->encoding)) {
 	case AU_FMT_ULAW:
-		if (hwparams.format != DEFAULT_FORMAT &&
+		if (hwparams.format != default_format &&
 		    hwparams.format != SND_PCM_FORMAT_MU_LAW)
 			fprintf(stderr, _("Warning: format is changed to MU_LAW\n"));
 		hwparams.format = SND_PCM_FORMAT_MU_LAW;
 		break;
 	case AU_FMT_LIN8:
-		if (hwparams.format != DEFAULT_FORMAT &&
+		if (hwparams.format != default_format &&
 		    hwparams.format != SND_PCM_FORMAT_U8)
 			fprintf(stderr, _("Warning: format is changed to U8\n"));
 		hwparams.format = SND_PCM_FORMAT_U8;
 		break;
 	case AU_FMT_LIN16:
-		if (hwparams.format != DEFAULT_FORMAT &&
+		if (hwparams.format != default_format &&
 		    hwparams.format != SND_PCM_FORMAT_S16_BE)
 			fprintf(stderr, _("Warning: format is changed to S16_BE\n"));
 		hwparams.format = SND_PCM_FORMAT_S16_BE;
@@ -1210,7 +1235,7 @@ static int test_au(int fd, void *buffer)
 	hwparams.channels = BE_INT(ap->channels);
 	if (hwparams.channels < 1 || hwparams.channels > 256)
 		return -1;
-	if ((size_t)safe_read(fd, buffer + sizeof(AuHeader), BE_INT(ap->hdr_size) - sizeof(AuHeader)) != BE_INT(ap->hdr_size) - sizeof(AuHeader)) {
+	if ((size_t)safe_read(fd, (char *)buffer + sizeof(AuHeader), BE_INT(ap->hdr_size) - sizeof(AuHeader)) != BE_INT(ap->hdr_size) - sizeof(AuHeader)) {
 		error(_("read error"));
 		prg_exit(EXIT_FAILURE);
 	}
@@ -1284,7 +1309,7 @@ static int setup_chmap(void)
 		}
 		if (i >= hw_chmap->channels) {
 			char buf[256];
-			error(_("Channel %d doesn't match with hw_parmas"), ch);
+			error(_("Channel %d doesn't match with hw_params"), ch);
 			snd_pcm_chmap_print(hw_chmap, sizeof(buf), buf);
 			fprintf(stderr, "hardware chmap = %s\n", buf);
 			free(hw_chmap);
@@ -1528,6 +1553,19 @@ static void done_stdin(void)
 	tcsetattr(fileno(stdin), TCSANOW, &term);
 }
 
+static char wait_for_input(void)
+{
+	struct pollfd pfd;
+	unsigned char b;
+
+	do {
+		pfd.fd = fileno(stdin);
+		pfd.events = POLLIN;
+		poll(&pfd, 1, -1);
+	} while (read(fileno(stdin), &b, 1) != 1);
+	return b;
+}
+
 static void do_pause(void)
 {
 	int err;
@@ -1546,7 +1584,7 @@ static void do_pause(void)
 		return;
 	}
 	while (1) {
-		while (read(fileno(stdin), &b, 1) != 1);
+		b = wait_for_input();
 		if (b == ' ' || b == '\r') {
 			while (read(fileno(stdin), &b, 1) == 1);
 			if (snd_pcm_state(handle) == SND_PCM_STATE_SUSPENDED)
@@ -1571,7 +1609,7 @@ static void check_stdin(void)
 				while (read(fileno(stdin), &b, 1) == 1);
 				fprintf(stderr, _("\r=== PAUSE ===                                                            "));
 				fflush(stderr);
-			do_pause();
+				do_pause();
 				fprintf(stderr, "                                                                          \r");
 				fflush(stderr);
 			}
@@ -1651,7 +1689,8 @@ static void xrun(void)
 			prg_exit(EXIT_FAILURE);
 		}
 		return;		/* ok, data should be accepted again */
-	} if (snd_pcm_status_get_state(status) == SND_PCM_STATE_DRAINING) {
+	}
+	if (snd_pcm_status_get_state(status) == SND_PCM_STATE_DRAINING) {
 		if (verbose) {
 			fprintf(stderr, _("Status(DRAINING):\n"));
 			snd_pcm_status_dump(status, log);
@@ -1765,12 +1804,12 @@ static void print_vu_meter(signed int *perc, signed int *maxperc)
 }
 
 /* peak handler */
-static void compute_max_peak(u_char *data, size_t count)
+static void compute_max_peak(u_char *data, size_t samples)
 {
 	signed int val, max, perc[2], max_peak[2];
-	static	int	run = 0;
-	size_t ocount = count;
-	int	format_little_endian = snd_pcm_format_little_endian(hwparams.format);	
+	static int run = 0;
+	size_t osamples = samples;
+	int format_little_endian = snd_pcm_format_little_endian(hwparams.format);
 	int ichans, c;
 
 	if (vumeter == VUMETER_STEREO)
@@ -1784,7 +1823,7 @@ static void compute_max_peak(u_char *data, size_t count)
 		signed char *valp = (signed char *)data;
 		signed char mask = snd_pcm_format_silence(hwparams.format);
 		c = 0;
-		while (count-- > 0) {
+		while (samples-- > 0) {
 			val = *valp++ ^ mask;
 			val = abs(val);
 			if (max_peak[c] < val)
@@ -1799,9 +1838,8 @@ static void compute_max_peak(u_char *data, size_t count)
 		signed short mask = snd_pcm_format_silence_16(hwparams.format);
 		signed short sval;
 
-		count /= 2;
 		c = 0;
-		while (count-- > 0) {
+		while (samples-- > 0) {
 			if (format_little_endian)
 				sval = le16toh(*valp);
 			else
@@ -1819,9 +1857,8 @@ static void compute_max_peak(u_char *data, size_t count)
 		unsigned char *valp = data;
 		signed int mask = snd_pcm_format_silence_32(hwparams.format);
 
-		count /= 3;
 		c = 0;
-		while (count-- > 0) {
+		while (samples-- > 0) {
 			if (format_little_endian) {
 				val = valp[0] | (valp[1]<<8) | (valp[2]<<16);
 			} else {
@@ -1844,9 +1881,8 @@ static void compute_max_peak(u_char *data, size_t count)
 		signed int *valp = (signed int *)data;
 		signed int mask = snd_pcm_format_silence_32(hwparams.format);
 
-		count /= 4;
 		c = 0;
-		while (count-- > 0) {
+		while (samples-- > 0) {
 			if (format_little_endian)
 				val = le32toh(*valp);
 			else
@@ -1895,8 +1931,8 @@ static void compute_max_peak(u_char *data, size_t count)
 		print_vu_meter(perc, maxperc);
 		fflush(stderr);
 	}
-	else if(verbose==3) {
-		fprintf(stderr, _("Max peak (%li samples): 0x%08x "), (long)ocount, max_peak[0]);
+	else if (verbose==3) {
+		fprintf(stderr, _("Max peak (%li samples): 0x%08x "), (long)osamples, max_peak[0]);
 		for (val = 0; val < 20; val++)
 			if (val <= perc[0] / 5)
 				putc('#', stderr);
@@ -1917,22 +1953,46 @@ static void do_test_position(void)
 	static snd_pcm_sframes_t minavail, mindelay;
 	static snd_pcm_sframes_t badavail = 0, baddelay = 0;
 	snd_pcm_sframes_t outofrange;
-	snd_pcm_sframes_t avail, delay;
+	snd_pcm_sframes_t avail, delay, savail, sdelay;
+	snd_pcm_status_t *status;
 	int err;
 
+	snd_pcm_status_alloca(&status);
 	err = snd_pcm_avail_delay(handle, &avail, &delay);
 	if (err < 0)
 		return;
+	err = snd_pcm_status(handle, status);
+	if (err < 0)
+		return;
+	savail = snd_pcm_status_get_avail(status);
+	sdelay = snd_pcm_status_get_delay(status);
 	outofrange = (test_coef * (snd_pcm_sframes_t)buffer_frames) / 2;
 	if (avail > outofrange || avail < -outofrange ||
 	    delay > outofrange || delay < -outofrange) {
-	  badavail = avail; baddelay = delay;
-	  availsum = delaysum = samples = 0;
-	  maxavail = maxdelay = 0;
-	  minavail = mindelay = buffer_frames * 16;
-	  fprintf(stderr, _("Suspicious buffer position (%li total): "
-	  	"avail = %li, delay = %li, buffer = %li\n"),
-	  	++counter, (long)avail, (long)delay, (long)buffer_frames);
+		badavail = avail; baddelay = delay;
+		availsum = delaysum = samples = 0;
+		maxavail = maxdelay = 0;
+		minavail = mindelay = buffer_frames * 16;
+		fprintf(stderr, _("Suspicious buffer position (%li total): "
+			"avail = %li, delay = %li, buffer = %li\n"),
+			++counter, (long)avail, (long)delay, (long)buffer_frames);
+	} else if (savail > outofrange || savail < -outofrange ||
+		   sdelay > outofrange || sdelay < -outofrange) {
+		badavail = savail; baddelay = sdelay;
+		availsum = delaysum = samples = 0;
+		maxavail = maxdelay = 0;
+		minavail = mindelay = buffer_frames * 16;
+		fprintf(stderr, _("Suspicious status buffer position (%li total): "
+			"avail = %li, delay = %li, buffer = %li\n"),
+			++counter, (long)savail, (long)sdelay, (long)buffer_frames);
+	} else if (avail > delay) {
+		fprintf(stderr, _("Suspicious buffer position avail > delay (%li total): "
+			"avail = %li, delay = %li\n"),
+			++counter, (long)avail, (long)delay);
+	} else if (savail > sdelay) {
+		fprintf(stderr, _("Suspicious status buffer position avail > delay (%li total): "
+			"avail = %li, delay = %li\n"),
+			++counter, (long)savail, (long)sdelay);
 	} else if (verbose) {
 		time(&now);
 		if (tmr == (time_t) -1) {
@@ -1943,19 +2003,27 @@ static void do_test_position(void)
 		}
 		if (avail > maxavail)
 			maxavail = avail;
+		if (savail > maxavail)
+			maxavail = savail;
 		if (delay > maxdelay)
 			maxdelay = delay;
+		if (sdelay > maxdelay)
+			maxdelay = sdelay;
 		if (avail < minavail)
 			minavail = avail;
+		if (savail < minavail)
+			minavail = savail;
 		if (delay < mindelay)
 			mindelay = delay;
+		if (sdelay < mindelay)
+			mindelay = sdelay;
 		availsum += avail;
 		delaysum += delay;
 		samples++;
-		if (avail != 0 && now != tmr) {
+		if ((maxavail != 0 || maxdelay != 0) && now != tmr) {
 			fprintf(stderr, "BUFPOS: avg%li/%li "
 				"min%li/%li max%li/%li (%li) (%li:%li/%li)\n",
-				(long)(availsum / samples),
+                         (long)(availsum / samples),
 				(long)(delaysum / samples),
 				(long)minavail, (long)mindelay,
 				(long)maxavail, (long)maxdelay,
@@ -1963,6 +2031,10 @@ static void do_test_position(void)
 				counter, badavail, baddelay);
 			tmr = now;
 		}
+	}
+	if (verbose == 1) {
+		fprintf(stderr, _("Status(R/W) (standalone avail=%li delay=%li):\n"), (long)avail, (long)delay);
+		snd_pcm_status_dump(status, log);
 	}
 }
 
@@ -2135,7 +2207,9 @@ static ssize_t pcm_read(u_char *data, size_t rcount)
 		count = chunk_size;
 	}
 
-	while (count > 0 && !in_aborting) {
+	while (count > 0) {
+		if (in_aborting)
+			goto abort;
 		if (test_position)
 			do_test_position();
 		check_stdin();
@@ -2161,6 +2235,7 @@ static ssize_t pcm_read(u_char *data, size_t rcount)
 			data += r * bits_per_frame / 8;
 		}
 	}
+abort:
 	return rcount;
 }
 
@@ -2174,7 +2249,9 @@ static ssize_t pcm_readv(u_char **data, unsigned int channels, size_t rcount)
 		count = chunk_size;
 	}
 
-	while (count > 0 && !in_aborting) {
+	while (count > 0) {
+		if (in_aborting)
+			goto abort;
 		unsigned int channel;
 		void *bufs[channels];
 		size_t offset = result;
@@ -2206,6 +2283,7 @@ static ssize_t pcm_readv(u_char **data, unsigned int channels, size_t rcount)
 			count -= r;
 		}
 	}
+abort:
 	return rcount;
 }
 
@@ -2312,7 +2390,7 @@ static void voc_play(int fd, int ofs, char *name)
 			prg_exit(EXIT_FAILURE);
 		}
 	}
-	hwparams.format = DEFAULT_FORMAT;
+	hwparams.format = default_format;
 	hwparams.channels = 1;
 	hwparams.rate = DEFAULT_SPEED;
 	set_params();
@@ -3037,6 +3115,7 @@ static int new_capture_file(char *name, char *namebuf, size_t namelen,
 
 	/* get a copy of the original filename */
 	strncpy(buf, name, sizeof(buf));
+	buf[sizeof(buf)-1] = '\0';
 
 	/* separate extension from filename */
 	s = buf + strlen(buf);
@@ -3199,11 +3278,12 @@ static void capture(char *orig_name)
 			size_t c = (rest <= (off64_t)chunk_bytes) ?
 				(size_t)rest : chunk_bytes;
 			size_t f = c * 8 / bits_per_frame;
-			if (pcm_read(audiobuf, f) != f) {
+			size_t read = pcm_read(audiobuf, f);
+			size_t save;
+			if (read != f)
 				in_aborting = 1;
-				break;
-			}
-			if (xwrite(fd, audiobuf, c) != c) {
+			save = read * bits_per_frame / 8;
+			if (xwrite(fd, audiobuf, save) != save) {
 				perror(name);
 				in_aborting = 1;
 				break;

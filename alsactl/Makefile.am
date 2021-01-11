@@ -7,8 +7,10 @@ man_MANS += alsactl_init.7
 endif
 EXTRA_DIST=alsactl.1 alsactl_init.xml
 
-alsactl_SOURCES=alsactl.c state.c lock.c utils.c init_parse.c daemon.c \
-                monitor.c
+AM_CFLAGS = -D_GNU_SOURCE
+
+alsactl_SOURCES=alsactl.c state.c lock.c utils.c init_parse.c init_ucm.c \
+		daemon.c monitor.c
 
 alsactl_CFLAGS=$(AM_CFLAGS) -D__USE_GNU \
                -DSYS_ASOUNDRC=\"$(ASOUND_STATE_DIR)/asound.state\" \

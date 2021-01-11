@@ -107,11 +107,11 @@ static void syslog_(int prio, const char *fcn, long line,
 {
 	char buf[1024];
 
-	snprintf(buf, sizeof(buf), "%s: %s:%ld", command, fcn, line);
+	snprintf(buf, sizeof(buf), "%s: %s:%ld: ", command, fcn, line);
 	buf[sizeof(buf)-1] = '\0';
 	vsnprintf(buf + strlen(buf), sizeof(buf)-strlen(buf), fmt, ap);
 	buf[sizeof(buf)-1] = '\0';
-	syslog(LOG_INFO, "%s", buf);
+	syslog(prio, "%s", buf);
 }
 
 void info_(const char *fcn, long line, const char *fmt, ...)
@@ -176,4 +176,20 @@ void dbg_(const char *fcn, long line, const char *fmt, ...)
 		putc('\n', stderr);
 	}
 	va_end(ap);
+}
+
+void error_handler(const char *file, int line, const char *function, int err, const char *fmt, ...)
+{
+	char buf[2048];
+	va_list arg;
+
+	va_start(arg, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, arg);
+	va_end(arg);
+	if (use_syslog)
+		syslog(LOG_ERR, "alsa-lib %s:%i:(%s) %s%s%s\n", file, line, function,
+				buf, err ? ": " : "", err ? snd_strerror(err) : "");
+	else
+		fprintf(stderr, "alsa-lib %s:%i:(%s) %s%s%s\n", file, line, function,
+				buf, err ? ": " : "", err ? snd_strerror(err) : "");
 }

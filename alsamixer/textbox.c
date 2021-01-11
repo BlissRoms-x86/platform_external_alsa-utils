@@ -32,8 +32,7 @@
 #include "colors.h"
 #include "widget.h"
 #include "textbox.h"
-
-#define MAX_FILE_SIZE 1048576
+#include "bindings.h"
 
 static void create_text_box(const char *const *lines, unsigned int count,
 			    const char *title, int attrs);
@@ -49,7 +48,7 @@ void show_error(const char *msg, int err)
 		lines[1] = strerror(err);
 		count = 2;
 	}
-	create_text_box(lines, count, _("Error"), attr_errormsg);
+	create_text_box(lines, count, _("Error"), attrs.errormsg);
 }
 
 void show_alsa_error(const char *msg, int err)
@@ -63,39 +62,7 @@ void show_alsa_error(const char *msg, int err)
 		lines[1] = snd_strerror(err);
 		count = 2;
 	}
-	create_text_box(lines, count, _("Error"), attr_errormsg);
-}
-
-static char *read_file(const char *file_name, unsigned int *file_size)
-{
-	FILE *f;
-	int err;
-	char *buf;
-	unsigned int allocated = 2048;
-	unsigned int bytes_read;
-
-	f = fopen(file_name, "r");
-	if (!f) {
-		err = errno;
-		buf = casprintf(_("Cannot open file \"%s\"."), file_name);
-		show_error(buf, err);
-		free(buf);
-		return NULL;
-	}
-	*file_size = 0;
-	buf = NULL;
-	do {
-		allocated *= 2;
-		buf = crealloc(buf, allocated);
-		bytes_read = fread(buf + *file_size, 1, allocated - *file_size, f);
-		*file_size += bytes_read;
-	} while (*file_size == allocated && allocated < MAX_FILE_SIZE);
-	fclose(f);
-	if (*file_size > 0 && buf[*file_size - 1] != '\n' && *file_size < allocated) {
-		buf[*file_size] = '\n';
-		++*file_size;
-	}
-	return buf;
+	create_text_box(lines, count, _("Error"), attrs.errormsg);
 }
 
 void show_textfile(const char *file_name)
@@ -108,8 +75,12 @@ void show_textfile(const char *file_name)
 	const char *start_line;
 
 	buf = read_file(file_name, &file_size);
-	if (!buf)
+	if (!buf) {
+		int err = errno;
+		buf = casprintf(_("Cannot open file \"%s\"."), file_name);
+		show_error(buf, err);
 		return;
+	}
 	line_count = 0;
 	for (i = 0; i < file_size; ++i)
 		line_count += buf[i] == '\n';
@@ -125,14 +96,14 @@ void show_textfile(const char *file_name)
 		if (buf[i] == '\t')
 			buf[i] = ' ';
 	}
-	create_text_box(lines, line_count, file_name, attr_textbox);
+	create_text_box(lines, line_count, file_name, attrs.textbox);
 	free(lines);
 	free(buf);
 }
 
 void show_text(const char *const *lines, unsigned int count, const char *title)
 {
-	create_text_box(lines, count, title, attr_textbox);
+	create_text_box(lines, count, title, attrs.textbox);
 }
 
 /**********************************************************************/
@@ -184,8 +155,7 @@ static void update_text_lines(void)
 static void update_y_scroll_bar(void)
 {
 	int length;
-	int begin, end;
-	int i;
+	int begin;
 
 	if (max_scroll_y <= 0 || text_lines_count == 0)
 		return;
@@ -193,17 +163,14 @@ static void update_y_scroll_bar(void)
 	if (length >= text_box_y)
 		return;
 	begin = current_top * (text_box_y - length) / max_scroll_y;
-	end = begin + length;
-	for (i = 0; i < text_box_y; ++i)
-		mvwaddch(text_widget.window, i + 1, text_box_x + 1,
-			 i >= begin && i < end ? ACS_BOARD : ' ');
+	mvwvline(text_widget.window, 1, text_box_x + 1, ' ', text_box_y);
+	mvwvline(text_widget.window, begin + 1, text_box_x + 1, ACS_BOARD, length);
 }
 
 static void update_x_scroll_bar(void)
 {
 	int length;
-	int begin, end;
-	int i;
+	int begin;
 
 	if (max_scroll_x <= 0 || max_line_width <= 0)
 		return;
@@ -211,10 +178,8 @@ static void update_x_scroll_bar(void)
 	if (length >= text_box_x)
 		return;
 	begin = current_left * (text_box_x - length) / max_scroll_x;
-	end = begin + length;
-	wmove(text_widget.window, text_box_y + 1, 1);
-	for (i = 0; i < text_box_x; ++i)
-		waddch(text_widget.window, i >= begin && i < end ? ACS_BOARD : ' ');
+	mvwhline(text_widget.window, text_box_y + 1, 1, ' ', text_box_x);
+	mvwhline(text_widget.window, text_box_y + 1, begin + 1, ACS_BOARD, length);
 }
 
 static void move_x(int delta)
@@ -251,68 +216,41 @@ static void move_y(int delta)
 
 static void on_handle_key(int key)
 {
-	switch (key) {
-	case 10:
-	case 13:
-	case 27:
-	case KEY_CANCEL:
-	case KEY_ENTER:
-	case KEY_CLOSE:
-	case KEY_EXIT:
+	if (key >= ARRAY_SIZE(textbox_bindings))
+		return;
+
+	switch (textbox_bindings[key]) {
+	case CMD_TEXTBOX_CLOSE:
 		text_widget.close();
 		break;
-	case KEY_DOWN:
-	case KEY_SF:
-	case 'J':
-	case 'j':
-	case 'X':
-	case 'x':
+	case CMD_TEXTBOX_DOWN:
 		move_y(1);
 		break;
-	case KEY_UP:
-	case KEY_SR:
-	case 'K':
-	case 'k':
-	case 'W':
-	case 'w':
+	case CMD_TEXTBOX_UP:
 		move_y(-1);
 		break;
-	case KEY_LEFT:
-	case 'H':
-	case 'h':
-	case 'P':
-	case 'p':
+	case CMD_TEXTBOX_LEFT:
 		move_x(-1);
 		break;
-	case KEY_RIGHT:
-	case 'L':
-	case 'l':
-	case 'N':
-	case 'n':
+	case CMD_TEXTBOX_RIGHT:
 		move_x(1);
 		break;
-	case KEY_NPAGE:
-	case ' ':
+	case CMD_TEXTBOX_PAGE_DOWN:
 		move_y(text_box_y);
 		break;
-	case KEY_PPAGE:
-	case KEY_BACKSPACE:
-	case 'B':
-	case 'b':
+	case CMD_TEXTBOX_PAGE_UP:
 		move_y(-text_box_y);
 		break;
-	case KEY_HOME:
-	case KEY_BEG:
+	case CMD_TEXTBOX_TOP:
 		move_x(-max_scroll_x);
 		break;
-	case KEY_LL:
-	case KEY_END:
+	case CMD_TEXTBOX_BOTTOM:
 		move_x(max_scroll_x);
 		break;
-	case '\t':
+	case CMD_TEXTBOX_PAGE_RIGHT:
 		move_x(8);
 		break;
-	case KEY_BTAB:
+	case CMD_TEXTBOX_PAGE_LEFT:
 		move_x(-8);
 		break;
 	}

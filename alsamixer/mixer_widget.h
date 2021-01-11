@@ -12,6 +12,11 @@ enum view_mode {
 	VIEW_MODE_COUNT,
 };
 
+enum channel_mask {
+	LEFT = 1,
+	RIGHT = 2,
+};
+
 extern snd_mixer_t *mixer;
 extern char *mixer_device_name;
 extern bool unplugged;
@@ -26,6 +31,9 @@ extern unsigned int current_control_flags;
 
 extern bool control_values_changed;
 extern bool controls_changed;
+
+extern unsigned int mouse_wheel_step;
+extern bool mouse_wheel_focuses_control;
 
 void create_mixer_object(struct snd_mixer_selem_regopt *selem_regopt);
 void create_mixer_widget(void);

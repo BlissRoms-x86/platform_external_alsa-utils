@@ -47,14 +47,35 @@ Available options:
   **-h**, **--help**
     this help
 
+  **-V**, **--version**
+    show the utility version and versions of used libraries
+
   **-c**, **--compile** `FILE`
     source configuration file for the compilation
 
+  **-d**, **--decode** `FILE`
+    source binary topology file for the decode
+
+  **-n**, **--normalize** `FILE`
+    parse and save the configuration file in the normalized format
+
+  **-u**, **--dump** `FILE`
+    parse and save the configuration file in the specified format
+
   **-o**, **--output** `FILE`
-    output binary file
+    output file
 
   **-v**, **--verbose** `LEVEL`
     set verbose level
+
+  **-s**, **--sort**
+    sort the configuration identifiers (set for normalization)
+
+  **-x**, **--nocheck**
+    save the configuration without additional integrity check
+
+  **-z**, **--dapm-nosort**
+    do not sort DAPM graph items (like in version 1.2.1-)
 
 
 FILES

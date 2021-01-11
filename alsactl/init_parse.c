@@ -465,12 +465,13 @@ static int set_ctl_value(struct space *space, const char *value, int all)
 			return -EINVAL;
 		}
 		for (idx = 0; idx < count; idx += 2) {
-			val = hextodigit(*(value++)) << 4;
-			val |= hextodigit(*(value++));
-			if (val > 255) {
+			int nibble1 = hextodigit(*(value++));
+			int nibble2 = hextodigit(*(value++));
+			if (nibble1 < 0 || nibble2 < 0) {
 				Perror(space, "bad ctl hexa value");
 				return -EINVAL;
 			}
+			val = (nibble1 << 4) | nibble2;
 			snd_ctl_elem_value_set_byte(space->ctl_value, idx, val);
 		}
 		break;
@@ -1700,6 +1701,7 @@ static int parse(struct space *space, const char *filename)
 		
 		if (count > linesize - 1) {
 			free(line);
+			line = NULL;
 			linesize = (count + 127 + 1) & ~127;
 			if (linesize > 2048) {
 				error("file %s, line %i too long", filename, linenum);
@@ -1742,10 +1744,10 @@ static int parse(struct space *space, const char *filename)
 	return err ? err : -abs(space->exit_code);
 }
 
-int init(const char *filename, const char *cardname)
+int init(const char *filename, int flags, const char *cardname)
 {
 	struct space *space;
-	int err = 0, card, first;
+	int err = 0, lasterr = 0, card, first;
 	
 	sysfs_init();
 	if (!cardname) {
@@ -1762,21 +1764,37 @@ int init(const char *filename, const char *cardname)
 				break;
 			}
 			first = 0;
+			if (!(flags & FLAG_UCM_DISABLED)) {
+				err = init_ucm(flags, card);
+				if (err == 0)
+					continue;
+			}
 			err = init_space(&space, card);
 			if (err == 0) {
 				space->rootdir = new_root_dir(filename);
 				if (space->rootdir != NULL)
 					err = parse(space, filename);
+				if (err <= -99) { /* non-fatal errors */
+					if (lasterr == 0)
+						lasterr = err;
+					err = 0;
+				}
 				free_space(space);
 			}
 			if (err < 0)
 				break;
 		}
+		err = lasterr;
 	} else {
 		card = snd_card_get_index(cardname);
 		if (card < 0) {
 			error("Cannot find soundcard '%s'...", cardname);
 			goto error;
+		}
+		if (!(flags & FLAG_UCM_DISABLED)) {
+			err = init_ucm(flags, card);
+			if (err == 0)
+				return 0;
 		}
 		memset(&space, 0, sizeof(space));
 		err = init_space(&space, card);

@@ -969,13 +969,14 @@ static int xrun_sync(struct loopback *loop)
 					"sync: playback silence added %li samples\n", (long)diff);
 			play->buf_pos -= diff;
 			play->buf_pos %= play->buf_size;
-			if ((err = snd_pcm_format_set_silence(play->format, play->buf + play->buf_pos * play->channels, diff)) < 0)
+			err =  snd_pcm_format_set_silence(play->format, play->buf + play->buf_pos * play->frame_size,
+							  diff * play->channels);
+			if (err < 0)
 				return err;
 			play->buf_count += diff;
 		}
 		if ((err = snd_pcm_prepare(play->handle)) < 0) {
 			logit(LOG_CRIT, "%s prepare failed: %s\n", play->id, snd_strerror(err));
-
 			return err;
 		}
 		delay1 = writeit(play);
@@ -1001,7 +1002,9 @@ static int xrun_sync(struct loopback *loop)
 					"sync: playback short, silence filling %li / buf_count=%li\n", (long)delay1, play->buf_count);
 			if (delay1 > diff)
 				delay1 = diff;
-			if ((err = snd_pcm_format_set_silence(play->format, play->buf + play->buf_pos * play->channels, delay1)) < 0)
+			err = snd_pcm_format_set_silence(play->format, play->buf + play->buf_pos * play->frame_size,
+							 delay1 * play->channels);
+			if (err < 0)
 				return err;
 			play->buf_pos += delay1;
 			play->buf_pos %= play->buf_size;
@@ -1695,9 +1698,8 @@ int pcmjob_pollfds_init(struct loopback *loop, struct pollfd *fds)
 static snd_pcm_sframes_t get_queued_playback_samples(struct loopback *loop)
 {
 	snd_pcm_sframes_t delay;
-	int err;
 
-	if ((err = snd_pcm_delay(loop->play->handle, &delay)) < 0)
+	if (snd_pcm_delay(loop->play->handle, &delay) < 0)
 		return 0;
 	loop->play->last_delay = delay;
 	delay += loop->play->buf_count;
@@ -1951,8 +1953,16 @@ int pcmjob_pollfds_handle(struct loopback *loop, struct pollfd *fds)
 	}
 	if (loop->sync != SYNC_TYPE_NONE) {
 		snd_pcm_sframes_t pqueued, cqueued;
-		pqueued = get_queued_playback_samples(loop);
-		cqueued = get_queued_capture_samples(loop);
+
+		/* Reduce cumulative error by interleaving playback vs capture reading order */
+		if (loop->total_queued_count & 1) {
+			pqueued = get_queued_playback_samples(loop);
+			cqueued = get_queued_capture_samples(loop);
+		} else {
+			cqueued = get_queued_capture_samples(loop);
+			pqueued = get_queued_playback_samples(loop);
+		}
+
 		if (verbose > 4)
 			snd_output_printf(loop->output, "%s: queued %li/%li samples\n", loop->id, pqueued, cqueued);
 		if (pqueued > 0)

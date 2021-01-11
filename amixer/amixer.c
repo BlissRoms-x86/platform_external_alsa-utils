@@ -192,16 +192,22 @@ static int convert_prange(long val, long min, long max)
 	int tmp;
 
 	if (range == 0)
-		return 0;
+		return min;
 	val -= min;
 	tmp = rint((double)val/(double)range * 100);
 	return tmp;
 }
 
-/* Function to convert from percentage to volume. val = percentage */
+/* Function to convert from percentage to volume. perc = percentage */
+static long convert_prange1(long perc, long min, long max)
+{
+	long tmp;
 
-#define convert_prange1(val, min, max) \
-	ceil((val) * ((max) - (min)) * 0.01 + (min))
+	tmp = rint((double)perc * (double)(max - min) * 0.01);
+	if (tmp == 0 && perc > 0)
+		tmp++;
+	return tmp + min;
+}
 
 struct volume_ops {
 	int (*get_range)(snd_mixer_elem_t *elem, long *min, long *max);
@@ -620,7 +626,7 @@ static int show_control(const char *space, snd_hctl_elem_t *elem,
 		       snd_ctl_elem_info_get_step(info));
 		break;
 	case SND_CTL_ELEM_TYPE_INTEGER64:
-		printf(",min=%Li,max=%Li,step=%Li\n", 
+		printf(",min=%lli,max=%lli,step=%lli\n",
 		       snd_ctl_elem_info_get_min64(info),
 		       snd_ctl_elem_info_get_max64(info),
 		       snd_ctl_elem_info_get_step64(info));
@@ -662,7 +668,7 @@ static int show_control(const char *space, snd_hctl_elem_t *elem,
 				printf("%li", snd_ctl_elem_value_get_integer(control, idx));
 				break;
 			case SND_CTL_ELEM_TYPE_INTEGER64:
-				printf("%Li", snd_ctl_elem_value_get_integer64(control, idx));
+				printf("%lli", snd_ctl_elem_value_get_integer64(control, idx));
 				break;
 			case SND_CTL_ELEM_TYPE_ENUMERATED:
 				printf("%u", snd_ctl_elem_value_get_enumerated(control, idx));
